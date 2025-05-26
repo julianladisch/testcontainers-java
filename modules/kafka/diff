@@ -1,0 +1,58 @@
+diff --git i/modules/kafka/src/main/java/org/testcontainers/kafka/KafkaHelper.java w/modules/kafka/src/main/java/org/testcontainers/kafka/KafkaHelper.java
+index 61e790d47..50c40b16e 100644
+--- i/modules/kafka/src/main/java/org/testcontainers/kafka/KafkaHelper.java
++++ w/modules/kafka/src/main/java/org/testcontainers/kafka/KafkaHelper.java
+@@ -72,6 +72,11 @@ class KafkaHelper {
+             .collect(Collectors.toSet());
+ 
+         List<String> listenersToTransform = new ArrayList<>(listenersSuppliers);
++        List<String> networkAliases = kafkaContainer.getNetworkAliases();
++        if (listenersToTransform.isEmpty() && !networkAliases.isEmpty()) {
++        	System.out.println("qqq " + networkAliases.get(0) + ":" + KAFKA_PORT);
++        	listenersToTransform.add(networkAliases.get(0) + ":" + KAFKA_PORT);
++        }
+         for (int i = 0; i < listenersToTransform.size(); i++) {
+             String protocol = String.format("%s-%d", PROTOCOL_PREFIX, i);
+             String listener = listenersToTransform.get(i);
+diff --git i/modules/kafka/src/test/java/org/testcontainers/kafka/KafkaContainerTest.java w/modules/kafka/src/test/java/org/testcontainers/kafka/KafkaContainerTest.java
+index e81b52574..06a2b1835 100644
+--- i/modules/kafka/src/test/java/org/testcontainers/kafka/KafkaContainerTest.java
++++ w/modules/kafka/src/test/java/org/testcontainers/kafka/KafkaContainerTest.java
+@@ -21,6 +21,19 @@ public class KafkaContainerTest extends AbstractKafka {
+         }
+     }
+ 
++    @Test
++    public void testUsageWithNetworkAlias() throws Exception {
++        try (
++            Network network = Network.newNetwork();
++            KafkaContainer kafka = new KafkaContainer("apache/kafka-native:3.8.0")
++                .withNetworkAliases("mykafka")
++                .withNetwork(network)
++        ) {
++            kafka.start();
++            testUsage("mykafka:9092", network);
++        }
++    }
++    
+     @Test
+     public void testUsageWithListener() throws Exception {
+         try (
+@@ -60,4 +73,17 @@ public class KafkaContainerTest extends AbstractKafka {
+             testKafkaFunctionality(bootstrapServers);
+         }
+     }
++    
++    private void testUsage(String listener, Network network) throws Exception {
++    	try (KCatContainer kcat = new KCatContainer().withNetwork(network)) {
++    		kcat.start();
++
++    		kcat.execInContainer("kcat", "-b", listener, "-t", "msgs", "-P", "-l", "/data/msgs.txt");
++    		String stdout = kcat
++    				.execInContainer("kcat", "-b", listener, "-C", "-t", "msgs", "-c", "1")
++    				.getStdout();
++
++    		assertThat(stdout).contains("Message produced by kcat");
++    	}
++    }
+ }

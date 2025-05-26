@@ -25,6 +25,19 @@ public class ConfluentKafkaContainerTest extends AbstractKafka {
     }
 
     @Test
+    public void testUsageWithNetworkAlias() {
+        try (
+            Network network = Network.newNetwork();
+            ConfluentKafkaContainer kafka = new ConfluentKafkaContainer("confluentinc/cp-kafka:7.4.0")
+                .withNetworkAliases("mykafka")
+                .withNetwork(network)
+        ) {
+            kafka.start();
+            assertKafka("mykafka:9092", network);
+        }
+    }
+
+    @Test
     public void testUsageWithListener() throws Exception {
         try (
             Network network = Network.newNetwork();
@@ -36,14 +49,7 @@ public class ConfluentKafkaContainerTest extends AbstractKafka {
             KCatContainer kcat = new KCatContainer().withNetwork(network)
         ) {
             kafka.start();
-            kcat.start();
-
-            kcat.execInContainer("kcat", "-b", "kafka:19092", "-t", "msgs", "-P", "-l", "/data/msgs.txt");
-            String stdout = kcat
-                .execInContainer("kcat", "-b", "kafka:19092", "-C", "-t", "msgs", "-c", "1")
-                .getStdout();
-
-            assertThat(stdout).contains("Message produced by kcat");
+            assertKafka("kafka:19092", network);
         }
     }
 
